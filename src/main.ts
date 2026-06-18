@@ -2,6 +2,7 @@ import { Editor, MarkdownFileInfo, Notice, Plugin } from "obsidian";
 import { CalloutGraphSettings, DEFAULT_SETTINGS } from "./types";
 import { CalloutIndex } from "./index/CalloutIndex";
 import { CalloutPanelView, CALLOUT_PANEL_VIEW } from "./panel/CalloutPanelView";
+import { GraphView, CALLOUT_GRAPH_VIEW } from "./view/GraphView";
 import { CalloutSuggest } from "./suggest/CalloutSuggest";
 import { RefModal } from "./suggest/RefModal";
 import { SuggestHost } from "./suggest/host";
@@ -19,7 +20,9 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 		this.index = new CalloutIndex(this.app, () => this.settings);
 
 		this.registerView(CALLOUT_PANEL_VIEW, (leaf) => new CalloutPanelView(leaf, this));
+		this.registerView(CALLOUT_GRAPH_VIEW, (leaf) => new GraphView(leaf, this));
 		this.addRibbonIcon("gem", "Open callout panel", () => this.activatePanel());
+		this.addRibbonIcon("git-fork", "Open callout graph", () => void this.activateGraph());
 
 		this.addCommand({
 			id: "open-callout-panel",
@@ -33,6 +36,21 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 			editorCallback: (editor: Editor, ctx: MarkdownFileInfo) => {
 				const path = ctx.file?.path ?? "";
 				new RefModal(this.app, this, editor, path).open();
+			},
+		});
+
+		this.addCommand({
+			id: "open-callout-graph",
+			name: "Open callout graph",
+			callback: () => void this.activateGraph(),
+		});
+
+		this.addCommand({
+			id: "focus-callout-in-graph",
+			name: "Focus current callout in graph",
+			callback: async () => {
+				const view = await this.activateGraph();
+				view?.focusCurrent();
 			},
 		});
 
@@ -95,6 +113,17 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 			await leaf.setViewState({ type: CALLOUT_PANEL_VIEW, active: true });
 		}
 		workspace.revealLeaf(leaf);
+	}
+
+	async activateGraph(): Promise<GraphView | null> {
+		const { workspace } = this.app;
+		let leaf = workspace.getLeavesOfType(CALLOUT_GRAPH_VIEW)[0];
+		if (!leaf) {
+			leaf = workspace.getLeaf("tab");
+			await leaf.setViewState({ type: CALLOUT_GRAPH_VIEW, active: true });
+		}
+		workspace.revealLeaf(leaf);
+		return leaf.view instanceof GraphView ? leaf.view : null;
 	}
 
 	// --- SuggestHost ----------------------------------------------------------

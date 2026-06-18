@@ -68,6 +68,22 @@ export class CalloutIndex {
 		out.sort((a, b) => a.path.localeCompare(b.path));
 		return out;
 	}
+	/** Flattened directed edge list (source depends on target). */
+	allEdges(): { source: string; target: string }[] {
+		const out: { source: string; target: string }[] = [];
+		for (const [s, targets] of this.edgesBySource) for (const t of targets) out.push({ source: s, target: t });
+		return out;
+	}
+	/** Block ids that occur more than once within one file (ambiguous reference targets). */
+	duplicateBlockIds(): { path: string; blockId: string; count: number }[] {
+		const out: { path: string; blockId: string; count: number }[] = [];
+		for (const [path, nodes] of this.nodesByPath) {
+			const counts = new Map<string, number>();
+			for (const n of nodes) if (n.blockId) counts.set(n.blockId, (counts.get(n.blockId) ?? 0) + 1);
+			for (const [blockId, count] of counts) if (count > 1) out.push({ path, blockId, count });
+		}
+		return out;
+	}
 	inDegree(id: string): number {
 		return this.reverseEdges.get(id)?.size ?? 0;
 	}
