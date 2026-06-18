@@ -1,0 +1,181 @@
+/* ===== Reference suggester rows (EditorSuggest + FuzzySuggestModal) ===== */
+.cg-suggest-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5em;
+}
+.cg-suggest-icon {
+	flex: 0 0 auto;
+	display: inline-flex;
+	margin-top: 0.1em;
+}
+.cg-suggest-icon .svg-icon {
+	width: 1em;
+	height: 1em;
+}
+.cg-suggest-main {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+.cg-suggest-title {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cg-suggest-type {
+	font-size: 0.72em;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	padding: 0 0.35em;
+	margin-right: 0.15em;
+}
+.cg-suggest-meta {
+	font-size: 0.8em;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cg-suggest-file {
+	color: var(--text-accent);
+}
+
+/* ===== Side panel ===== */
+.cg-panel {
+	padding: 0.4em 0.6em;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5em;
+	height: 100%;
+}
+.cg-panel-bar {
+	display: flex;
+	align-items: center;
+	gap: 0.35em;
+}
+.cg-panel-note {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding: 0.1em 0.3em;
+	border-radius: 4px;
+}
+.cg-panel-note:hover {
+	background: var(--background-modifier-hover);
+}
+.cg-icon-btn {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.25em 0.35em;
+	border-radius: 4px;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.cg-icon-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.cg-pin-btn.cg-pinned {
+	color: var(--text-accent);
+}
+
+/* note picker rows */
+.cg-pick-name {
+	font-weight: 500;
+}
+.cg-pick-meta {
+	font-size: 0.78em;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cg-panel-list {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5em;
+}
+.cg-empty {
+	color: var(--text-muted);
+	font-style: italic;
+	padding: 1em 0.2em;
+	text-align: center;
+}
+
+.cg-card {
+	position: relative;
+}
+/* compact muted meta strip in the card's top-right corner */
+.cg-card-bar {
+	position: absolute;
+	top: 0.4em;
+	right: 0.55em;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+	font-size: 0.72em;
+	color: var(--text-muted);
+	background: var(--background-primary-alt);
+	border-radius: 4px;
+	padding: 0.05em 0.35em;
+	opacity: 0.55;
+	transition: opacity 0.12s ease;
+}
+.cg-card:hover .cg-card-bar {
+	opacity: 1;
+}
+.cg-card-ref {
+	white-space: nowrap;
+}
+.cg-card-jump {
+	display: inline-flex;
+	cursor: pointer;
+	opacity: 0.8;
+}
+.cg-card-jump:hover {
+	opacity: 1;
+	color: var(--text-accent);
+}
+.cg-card-jump .svg-icon {
+	width: 0.9em;
+	height: 0.9em;
+}
+/* placeholder shown before a card scrolls into view and renders */
+.cg-card-ph {
+	color: var(--text-muted);
+	font-size: 0.9em;
+	padding: 0.55em 0.7em;
+	opacity: 0.55;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 6px;
+}
+/* the native callout rendered inside each card: tighten spacing for the panel */
+.cg-card-callout .callout {
+	margin: 0;
+	font-size: 0.92em;
+}
+.cg-card-callout .callout .callout-title {
+	padding-right: 3.2em; /* leave room for the meta strip */
+}
+.cg-card-callout p:first-child {
+	margin-top: 0.3em;
+}
+.cg-card-callout p:last-child {
+	margin-bottom: 0;
+}

@@ -1,0 +1,17 @@
+# npm
+node_modules/
+
+# build output (publish via GitHub releases instead)
+main.js
+*.map
+
+# local deploy config (your personal vault path)
+.deploy-target.json
+
+# editors
+.vscode/
+.idea/
+*.iml
+
+# os
+.DS_Store

@@ -1,0 +1,26 @@
+{
+  "name": "callout-graph",
+  "version": "0.1.0",
+  "description": "Index math callouts, browse them per-note, insert references, and visualize dependency edges from real ^block-id wikilinks.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "deploy": "npm run build && node deploy.mjs"
+  },
+  "keywords": ["obsidian", "callout", "graph", "math"],
+  "author": "Zhiyang Wang",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/cytoscape": "^3.21.0",
+    "@types/node": "^20.0.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.0",
+    "obsidian": "latest",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "cytoscape": "^3.30.0",
+    "cytoscape-fcose": "^2.2.0"
+  }
+}
