@@ -1,7 +1,7 @@
 {
   "name": "callout-graph",
   "version": "0.1.0",
-  "description": "Index math callouts, browse them per-note, insert references, and visualize dependency edges from real ^block-id wikilinks.",
+  "description": "Index math callouts, insert references to them, and browse any note's callouts in a side panel.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -22,10 +22,5 @@
     "esbuild": "^0.21.0",
     "obsidian": "latest",
     "typescript": "^5.4.0"
-  },
-  "dependencies": {
-    "@types/d3-force": "^3.0.10",
-    "d3-force": "^3.0.0",
-    "force-graph": "^1.51.4"
   }
 }

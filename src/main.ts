@@ -2,7 +2,6 @@ import { Editor, MarkdownFileInfo, Notice, Plugin } from "obsidian";
 import { CalloutGraphSettings, DEFAULT_SETTINGS } from "./types";
 import { CalloutIndex } from "./index/CalloutIndex";
 import { CalloutPanelView, CALLOUT_PANEL_VIEW } from "./panel/CalloutPanelView";
-import { GraphView, CALLOUT_GRAPH_VIEW } from "./view/GraphView";
 import { CalloutSuggest } from "./suggest/CalloutSuggest";
 import { RefModal } from "./suggest/RefModal";
 import { SuggestHost } from "./suggest/host";
@@ -17,12 +16,10 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 
 	async onload() {
 		await this.loadSettings();
-		this.index = new CalloutIndex(this.app, () => this.settings);
+		this.index = new CalloutIndex(this.app);
 
 		this.registerView(CALLOUT_PANEL_VIEW, (leaf) => new CalloutPanelView(leaf, this));
-		this.registerView(CALLOUT_GRAPH_VIEW, (leaf) => new GraphView(leaf, this));
 		this.addRibbonIcon("gem", "Open callout panel", () => this.activatePanel());
-		this.addRibbonIcon("git-fork", "Open callout graph", () => void this.activateGraph());
 
 		this.addCommand({
 			id: "open-callout-panel",
@@ -40,21 +37,6 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 		});
 
 		this.addCommand({
-			id: "open-callout-graph",
-			name: "Open callout graph",
-			callback: () => void this.activateGraph(),
-		});
-
-		this.addCommand({
-			id: "focus-callout-in-graph",
-			name: "Focus current callout in graph",
-			callback: async () => {
-				const view = await this.activateGraph();
-				view?.focusCurrent();
-			},
-		});
-
-		this.addCommand({
 			id: "callout-graph-stats",
 			name: "Show callout index stats",
 			callback: () => {
@@ -62,7 +44,7 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 				const top = [...s.byType.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
 				const lines = [
 					`Callouts: ${s.nodes} (labeled ${s.labeled}) in ${s.files} files`,
-					`Dependency edges: ${s.edges}`,
+					`References: ${s.references}`,
 					...top.map(([t, c]) => `  ${t}: ${c}`),
 				];
 				console.log("[callout-graph] " + lines.join("\n"));
@@ -113,17 +95,6 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 			await leaf.setViewState({ type: CALLOUT_PANEL_VIEW, active: true });
 		}
 		workspace.revealLeaf(leaf);
-	}
-
-	async activateGraph(): Promise<GraphView | null> {
-		const { workspace } = this.app;
-		let leaf = workspace.getLeavesOfType(CALLOUT_GRAPH_VIEW)[0];
-		if (!leaf) {
-			leaf = workspace.getLeaf("tab");
-			await leaf.setViewState({ type: CALLOUT_GRAPH_VIEW, active: true });
-		}
-		workspace.revealLeaf(leaf);
-		return leaf.view instanceof GraphView ? leaf.view : null;
 	}
 
 	// --- SuggestHost ----------------------------------------------------------

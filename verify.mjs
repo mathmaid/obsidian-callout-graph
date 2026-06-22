@@ -1,7 +1,7 @@
 // Standalone verification of the parsing engine against the REAL vault, without
 // Obsidian's metadataCache. Approximates callout sections by scanning contiguous
 // `>`-prefixed line blocks. Validates the first-line regex, displayName ladder,
-// block-id heuristic, proof detection, and edge extraction; prints sanity counts.
+// block-id heuristic, and reference counting; prints sanity counts.
 import { readdirSync, readFileSync, statSync, existsSync } from "fs";
 import { join } from "path";
 
@@ -38,10 +38,7 @@ function walk(dir, out = []) {
 
 const CALLOUT_FIRST = /^>\s*\[!([A-Za-z]+)\]([+-]?)\s*(.*?)\s*$/;
 const BLOCKID_LINE = /^>\s*\^([\w-]+)\s*$/;
-const PROOF_START = /^\s*\*\*\s*[Pp]roof\b.*?\*\*/;
-const PROOF_END = /\$\s*\\(square|blacksquare|qed)\s*\$|∎|\\qedhere/;
-const NAMED_PROOF = /\*\*\s*[Pp]roof\s+of\b/;
-const TYPE_PREFIXES = ["theorem","definition","proposition","corollary","conjecture","assumption","exercise","example","remark","lemma","claim","thm","def","prop","cor","conj","rmk","lem","exp","ex","clm","as"];
+const TYPE_PREFIXES =["theorem","definition","proposition","corollary","conjecture","assumption","exercise","example","remark","lemma","claim","thm","def","prop","cor","conj","rmk","lem","exp","ex","clm","as"];
 
 function basename(p) { return (p.split("/").pop() ?? p).replace(/\.md$/i, ""); }
 
@@ -100,7 +97,7 @@ function parseFile(path, content) {
 // All block-id wikilinks on a line: [[...#^id]] or [[#^id]] (and embeds).
 function linksOnLine(line) {
 	const out = [];
-	const re = /!?\[\[([^\]|#]*)#\^([\w-]+)(\|[^\]]*)?\]\]/g;
+	const re = /(?<!!)\[\[([^\]|#]*)#\^([\w-]+)(\|[^\]]*)?\]\]/g;
 	let m;
 	while ((m = re.exec(line))) out.push({ name: m[1].trim(), blockId: m[2] });
 	return out;
@@ -131,9 +128,8 @@ for (const f of files) {
 	}
 }
 
-// Pass 2: edges
-let edges = 0, eqDropped = 0, citekeyDropped = 0, selfLoops = 0, crossFile = 0, sameFile = 0;
-let proofTotal = 0, proofsWithLink = 0, namedProofs = 0;
+// Pass 2: references — every [[#^id]] link anywhere (incl. prose), counted raw.
+let refs = 0, nonCalloutDropped = 0, selfRefs = 0, crossFile = 0, sameFile = 0;
 function resolveTarget(rel, name, blockId) {
 	if (name === "") { // same file
 		const n = nodeById.get(`${rel}#^${blockId}`);
@@ -143,60 +139,19 @@ function resolveTarget(rel, name, blockId) {
 	return cands && cands.length ? cands[0] : null;
 }
 
-for (const [rel, nodes] of nodesByFile) {
-	const lines = allContent.get(rel).split("\n");
-	// proof regions
-	const calloutStarts = new Set(nodes.map((n) => n.start));
-	const regions = [];
-	for (let i = 0; i < lines.length; i++) {
-		if (!PROOF_START.test(lines[i])) continue;
-		proofTotal++;
-		const start = i;
-		let end = lines.length - 1;
-		for (let j = start; j < lines.length; j++) {
-			if (j > start && calloutStarts.has(j)) { end = j - 1; break; }
-			if (PROOF_END.test(lines[j])) { end = j; break; }
-		}
-		let owner = null, headerLine = -1;
-		if (NAMED_PROOF.test(lines[start])) {
-			namedProofs++;
-			for (const l of linksOnLine(lines[start])) {
-				const t = resolveTarget(rel, l.name, l.blockId);
-				if (t) { owner = t; headerLine = start; break; }
-			}
-		}
-		if (!owner) {
-			let best = null;
-			for (const n of nodes) if (n.start <= start && (!best || n.start > best.start)) best = n;
-			owner = best;
-		}
-		regions.push({ start, end, owner, headerLine });
-		i = end;
-	}
-	// scan links
-	let proofHadLink = new Set();
+for (const [rel, content] of allContent) {
+	const lines = content.split("\n");
+	const nodes = nodesByFile.get(rel) ?? []; // callouts in THIS file (for self-ref check)
 	for (let ln = 0; ln < lines.length; ln++) {
-		const links = linksOnLine(lines[ln]);
-		if (!links.length) continue;
-		// owner: containing callout body, else proof region
-		let owner = null, isHeader = false;
-		const containing = nodes.find((n) => ln >= n.start && ln <= n.end);
-		if (containing) owner = containing;
-		else {
-			const region = regions.find((r) => ln >= r.start && ln <= r.end);
-			if (region) { owner = region.owner; if (region.headerLine === ln) isHeader = true; if (region) proofHadLink.add(region.start); }
-		}
-		if (!owner) continue;
-		for (const l of links) {
-			if (isHeader) continue;
+		for (const l of linksOnLine(lines[ln])) {
 			const t = resolveTarget(rel, l.name, l.blockId);
-			if (!t) { if (l.name && !nodeByNameBlock.has(`${l.name}#^${l.blockId}`)) eqDropped++; continue; }
-			if (t.id === owner.id) { selfLoops++; continue; }
-			edges++;
-			if (t.path === owner.path) sameFile++; else crossFile++;
+			if (!t) { nonCalloutDropped++; continue; } // equation / citekey / non-callout / unresolved
+			// self-reference: link written inside the very callout it points to
+			if (t.path === rel && ln >= t.start && ln <= t.end) { selfRefs++; continue; }
+			refs++;
+			if (t.path === rel) sameFile++; else crossFile++;
 		}
 	}
-	proofsWithLink += proofHadLink.size;
 }
 
 // also count plain citekey links [[Key]] (no #^) for context
@@ -219,10 +174,10 @@ console.log(`Files with callouts:  ${nodesByFile.size}`);
 console.log(`Callouts (nodes):     ${nodeById.size}   (plan target ~1,879)`);
 console.log(`  labeled (^id):      ${labeled}   (plan target ~1,301)`);
 console.log(`  unlabeled:          ${nodeById.size - labeled}`);
-console.log(`Dependency edges:     ${edges}  (same-file ${sameFile}, cross-file ${crossFile})`);
-console.log(`  self-loops dropped: ${selfLoops}`);
-console.log(`Proofs found:         ${proofTotal}  (named ${namedProofs}, with >=1 block-link ${proofsWithLink})`);
-console.log(`Plain citekey links:  ${citekeyLinks}  (these never become edges)`);
+console.log(`References:           ${refs}  (same-file ${sameFile}, cross-file ${crossFile})`);
+console.log(`  self-refs dropped:  ${selfRefs}`);
+console.log(`  non-callout links:  ${nonCalloutDropped}  (equation / citekey / unresolved targets)`);
+console.log(`Plain citekey links:  ${citekeyLinks}  (these are never counted)`);
 console.log("Top types:");
 for (const [t, c] of [...byType.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)) {
 	console.log(`  ${t.padEnd(12)} ${c}`);

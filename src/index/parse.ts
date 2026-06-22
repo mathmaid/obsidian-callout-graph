@@ -79,17 +79,3 @@ export function extractPreview(bodyLines: string[]): string {
 	if (text.length > 220) text = text.slice(0, 220) + "…";
 	return text;
 }
-
-const PROOF_START = /^\s*\*\*\s*[Pp]roof\b.*?\*\*/;
-const PROOF_END = /\$\s*\\(square|blacksquare|qed)\s*\$|∎|\\qedhere/;
-
-export function isProofStart(line: string): boolean {
-	return PROOF_START.test(line);
-}
-export function isProofEnd(line: string): boolean {
-	return PROOF_END.test(line);
-}
-/** A named proof header like `**Proof of Theorem [[#^id]]:**` (vs. a bare `**Proof:**`). */
-export function isNamedProof(line: string): boolean {
-	return /\*\*\s*[Pp]roof\s+of\b/.test(line);
-}

@@ -49,7 +49,7 @@ export class CalloutSuggest extends EditorSuggest<CalloutNode> {
 					s:
 						(n.path === currentPath ? SAME_FILE_BOOST : 0) +
 						this.host.recencyScore(n.id) +
-						Math.log1p(idx.inDegree(n.id)) * w,
+						Math.log1p(idx.referenceCount(n.id)) * w,
 				}))
 				.sort((a, b) => b.s - a.s)
 				.slice(0, LIMIT)
@@ -64,7 +64,7 @@ export class CalloutSuggest extends EditorSuggest<CalloutNode> {
 			if (!r) continue;
 			let s = r.score;
 			if (n.path === currentPath) s += SAME_FILE_BOOST;
-			s += Math.log1p(idx.inDegree(n.id)) * w;
+			s += Math.log1p(idx.referenceCount(n.id)) * w;
 			s += this.host.recencyScore(n.id);
 			scored.push({ n, s });
 		}

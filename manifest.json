@@ -1,9 +1,9 @@
 {
   "id": "callout-graph",
-  "name": "Callout Dependency Graph",
+  "name": "Callout References",
   "version": "0.1.0",
   "minAppVersion": "1.9.0",
-  "description": "Index math callouts, browse a note's callouts in a side panel, insert callout references with @@, and visualize dependency edges parsed from real ^block-id wikilinks.",
+  "description": "Index math callouts, insert references to them, and browse any note's callouts in a side panel.",
   "author": "Zhiyang Wang",
   "isDesktopOnly": false
 }

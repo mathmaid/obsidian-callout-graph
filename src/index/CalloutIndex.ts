@@ -1,43 +1,31 @@
 import { App, CachedMetadata, TFile } from "obsidian";
-import { CalloutGraphSettings, CalloutNode } from "../types";
+import { CalloutNode } from "../types";
 import {
 	extractPreview,
-	isNamedProof,
-	isProofEnd,
-	isProofStart,
 	parseCalloutFirstLine,
 	resolveDisplayName,
 } from "./parse";
 import { resolveBlockTarget } from "./resolve";
 
-interface ProofRegion {
-	start: number;
-	end: number;
-	ownerId: string;
-	headerLinkLine: number; // line of the named-proof locator link (excluded from edges); -1 if none
-}
-
 export class CalloutIndex {
 	private app: App;
-	private getSettings: () => CalloutGraphSettings;
 
 	/** node id -> node */
 	nodeById = new Map<string, CalloutNode>();
 	/** file path -> nodes in document order */
 	nodesByPath = new Map<string, CalloutNode[]>();
-	/** authoritative out-edges, owned by the source */
-	edgesBySource = new Map<string, Set<string>>();
-	/** derived reverse index, rebuilt from edgesBySource */
-	reverseEdges = new Map<string, Set<string>>();
+	/** authoritative: source file path -> (target callout id -> # of links to it in that file) */
+	private refsByFile = new Map<string, Map<string, number>>();
+	/** derived total reference count per callout, rebuilt from refsByFile */
+	private refCount = new Map<string, number>();
 
 	private listeners = new Set<() => void>();
 	built = false;
 	private building = false;
 	private pending = false;
 
-	constructor(app: App, getSettings: () => CalloutGraphSettings) {
+	constructor(app: App) {
 		this.app = app;
-		this.getSettings = getSettings;
 	}
 
 	// --- events ---------------------------------------------------------------
@@ -68,41 +56,20 @@ export class CalloutIndex {
 		out.sort((a, b) => a.path.localeCompare(b.path));
 		return out;
 	}
-	/** Flattened directed edge list (source depends on target). */
-	allEdges(): { source: string; target: string }[] {
-		const out: { source: string; target: string }[] = [];
-		for (const [s, targets] of this.edgesBySource) for (const t of targets) out.push({ source: s, target: t });
-		return out;
-	}
-	/** Block ids that occur more than once within one file (ambiguous reference targets). */
-	duplicateBlockIds(): { path: string; blockId: string; count: number }[] {
-		const out: { path: string; blockId: string; count: number }[] = [];
-		for (const [path, nodes] of this.nodesByPath) {
-			const counts = new Map<string, number>();
-			for (const n of nodes) if (n.blockId) counts.set(n.blockId, (counts.get(n.blockId) ?? 0) + 1);
-			for (const [blockId, count] of counts) if (count > 1) out.push({ path, blockId, count });
-		}
-		return out;
-	}
-	inDegree(id: string): number {
-		return this.reverseEdges.get(id)?.size ?? 0;
-	}
-	outNeighbors(id: string): string[] {
-		return [...(this.edgesBySource.get(id) ?? [])];
-	}
-	inNeighbors(id: string): string[] {
-		return [...(this.reverseEdges.get(id) ?? [])];
+	/** Total number of [[#^id]] links across the vault that point to this callout. */
+	referenceCount(id: string): number {
+		return this.refCount.get(id) ?? 0;
 	}
 	stats() {
 		let labeled = 0;
 		const byType = new Map<string, number>();
-		let edges = 0;
+		let references = 0;
 		for (const n of this.nodeById.values()) {
 			if (n.blockId) labeled++;
 			byType.set(n.type, (byType.get(n.type) ?? 0) + 1);
 		}
-		for (const s of this.edgesBySource.values()) edges += s.size;
-		return { nodes: this.nodeById.size, labeled, edges, files: this.nodesByPath.size, byType };
+		for (const m of this.refsByFile.values()) for (const c of m.values()) references += c;
+		return { nodes: this.nodeById.size, labeled, references, files: this.nodesByPath.size, byType };
 	}
 
 	// --- build ----------------------------------------------------------------
@@ -128,13 +95,12 @@ export class CalloutIndex {
 	private async _buildAll() {
 		this.nodeById.clear();
 		this.nodesByPath.clear();
-		this.edgesBySource.clear();
-		this.reverseEdges.clear();
+		this.refsByFile.clear();
+		this.refCount.clear();
 
 		const files = this.app.vault.getMarkdownFiles();
-		const contentByPath = new Map<string, string>();
 
-		// Pass 1: nodes for every file (edges need all nodes present first).
+		// Pass 1: nodes for every file (refs need all target nodes present first).
 		// No gate on section.type — callouts are identified by the first-line regex
 		// inside parseFileNodes, so we make no assumption about how Obsidian types them.
 		for (const file of files) {
@@ -142,19 +108,17 @@ export class CalloutIndex {
 			if (!cache || !cache.sections || cache.sections.length === 0) continue;
 			const content = await this.app.vault.cachedRead(file);
 			this.parseFileNodes(file, content, cache);
-			if (this.nodesByPath.get(file.path)?.length) contentByPath.set(file.path, content);
 		}
 
-		// Pass 2: edges.
+		// Pass 2: references from EVERY file — a note may cite callouts in prose
+		// without containing any callout of its own.
 		for (const file of files) {
-			const content = contentByPath.get(file.path);
-			if (content === undefined) continue;
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			this.parseFileEdges(file, content, cache);
+			this.parseFileRefs(file, cache);
 		}
 
-		this.rebuildReverse();
+		this.rebuildRefCount();
 		this.built = true;
 		this.emit();
 	}
@@ -165,19 +129,17 @@ export class CalloutIndex {
 			return;
 		}
 		const old = this.nodesByPath.get(file.path) ?? [];
-		for (const n of old) {
-			this.nodeById.delete(n.id);
-			this.edgesBySource.delete(n.id);
-		}
+		for (const n of old) this.nodeById.delete(n.id);
 		this.nodesByPath.delete(file.path);
+		this.refsByFile.delete(file.path);
 
 		const fileCache = cache ?? this.app.metadataCache.getFileCache(file);
 		if (fileCache && fileCache.sections && fileCache.sections.length) {
 			const content = data ?? (await this.app.vault.cachedRead(file));
 			this.parseFileNodes(file, content, fileCache);
-			this.parseFileEdges(file, content, fileCache);
+			this.parseFileRefs(file, fileCache);
 		}
-		this.rebuildReverse();
+		this.rebuildRefCount();
 		this.emit();
 	}
 
@@ -187,12 +149,10 @@ export class CalloutIndex {
 			return;
 		}
 		const old = this.nodesByPath.get(path) ?? [];
-		for (const n of old) {
-			this.nodeById.delete(n.id);
-			this.edgesBySource.delete(n.id);
-		}
+		for (const n of old) this.nodeById.delete(n.id);
 		this.nodesByPath.delete(path);
-		this.rebuildReverse();
+		this.refsByFile.delete(path);
+		this.rebuildRefCount();
 		this.emit();
 	}
 
@@ -245,113 +205,33 @@ export class CalloutIndex {
 		this.nodesByPath.set(file.path, nodes);
 	}
 
-	private detectProofRegions(filePath: string, lines: string[], cache: CachedMetadata, nodes: CalloutNode[]): ProofRegion[] {
-		const headingLines = new Set((cache.headings ?? []).map((h) => h.position.start.line));
-		const calloutStarts = new Set(nodes.map((n) => n.startLine));
+	private parseFileRefs(file: TFile, cache: CachedMetadata) {
 		const links = cache.links ?? [];
-		const regions: ProofRegion[] = [];
-
-		for (let i = 0; i < lines.length; i++) {
-			if (!isProofStart(lines[i])) continue;
-			const start = i;
-			let end = lines.length - 1;
-			for (let j = start; j <= lines.length - 1; j++) {
-				if (j > start && (headingLines.has(j) || calloutStarts.has(j))) {
-					end = j - 1;
-					break;
-				}
-				if (isProofEnd(lines[j])) {
-					end = j;
-					break;
-				}
-			}
-
-			let ownerId: string | null = null;
-			let headerLinkLine = -1;
-			if (isNamedProof(lines[start])) {
-				for (const l of links) {
-					if (l.position.start.line !== start) continue;
-					const t = resolveBlockTarget(this.app, l.link, filePath);
-					if (!t) continue;
-					const tid = `${t.path}#^${t.blockId}`;
-					if (this.nodeById.has(tid)) {
-						ownerId = tid;
-						headerLinkLine = start;
-						break;
-					}
-				}
-			}
-			if (!ownerId) {
-				// bare proof: nearest preceding callout in this file
-				let best: CalloutNode | null = null;
-				for (const n of nodes) {
-					if (n.startLine <= start && (!best || n.startLine > best.startLine)) best = n;
-				}
-				ownerId = best ? best.id : null;
-			}
-
-			if (ownerId) regions.push({ start, end, ownerId, headerLinkLine });
-			i = end; // skip past this region
-		}
-		return regions;
-	}
-
-	private parseFileEdges(file: TFile, content: string, cache: CachedMetadata) {
-		const settings = this.getSettings();
-		const nodes = this.nodesByPath.get(file.path) ?? [];
-		if (nodes.length === 0) return;
-		const lines = content.split("\n");
-		const links = cache.links ?? [];
-		const proofRegions = this.detectProofRegions(file.path, lines, cache, nodes);
+		if (links.length === 0) return;
+		const perTarget = new Map<string, number>();
 
 		for (const link of links) {
-			const line = link.position.start.line;
-
-			// Determine the owning callout.
-			let ownerId: string | null = null;
-			const containing = nodes.find((n) => line >= n.startLine && line <= n.endLine);
-			if (containing) {
-				if (!settings.bodyLinksAsEdges) continue;
-				ownerId = containing.id;
-			} else {
-				const region = proofRegions.find((r) => line >= r.start && line <= r.end);
-				if (region) {
-					if (region.headerLinkLine === line) continue; // locator, not a dependency
-					ownerId = region.ownerId;
-				}
-			}
-			if (!ownerId) continue;
-
 			const target = resolveBlockTarget(this.app, link.link, file.path);
-			if (!target) continue;
+			if (!target) continue; // not a #^block link (equation / citekey / unresolved)
 			const targetId = `${target.path}#^${target.blockId}`;
-			if (!this.nodeById.has(targetId)) continue; // target block is not a callout
-			if (targetId === ownerId) continue; // self-loop
-			this.addEdge(ownerId, targetId);
+			const targetNode = this.nodeById.get(targetId);
+			if (!targetNode) continue; // target block is not a callout
+			// Skip self-references: a link written inside the very callout it points to.
+			const line = link.position.start.line;
+			if (target.path === file.path && line >= targetNode.startLine && line <= targetNode.endLine) continue;
+			perTarget.set(targetId, (perTarget.get(targetId) ?? 0) + 1);
 		}
+
+		if (perTarget.size) this.refsByFile.set(file.path, perTarget);
 	}
 
-	// --- edge bookkeeping -----------------------------------------------------
+	// --- reference bookkeeping ------------------------------------------------
 
-	private addEdge(source: string, target: string) {
-		let set = this.edgesBySource.get(source);
-		if (!set) {
-			set = new Set();
-			this.edgesBySource.set(source, set);
-		}
-		set.add(target);
-	}
-
-	private rebuildReverse() {
-		this.reverseEdges.clear();
-		for (const [source, targets] of this.edgesBySource) {
-			for (const t of targets) {
-				let set = this.reverseEdges.get(t);
-				if (!set) {
-					set = new Set();
-					this.reverseEdges.set(t, set);
-				}
-				set.add(source);
+	private rebuildRefCount() {
+		this.refCount.clear();
+		for (const perTarget of this.refsByFile.values()) {
+			for (const [targetId, c] of perTarget) {
+				this.refCount.set(targetId, (this.refCount.get(targetId) ?? 0) + c);
 			}
 		}
 	}

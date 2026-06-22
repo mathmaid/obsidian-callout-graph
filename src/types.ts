@@ -22,10 +22,8 @@ export interface CalloutNode {
 export interface CalloutGraphSettings {
 	/** Basename length above which the inserter uses the alias form. */
 	longNameThreshold: number;
-	/** Ranking boost weight applied to log1p(inDegree). */
+	/** Ranking boost weight applied to log1p(referenceCount). */
 	inDegreeWeight: number;
-	/** Count links inside a callout's own body as edges (superset of proof-only). */
-	bodyLinksAsEdges: boolean;
 	/** Editor-suggest trigger string. Default ";;" — "@" is taken by latex-suite Greek snippets. */
 	triggerString: string;
 }
@@ -33,7 +31,6 @@ export interface CalloutGraphSettings {
 export const DEFAULT_SETTINGS: CalloutGraphSettings = {
 	longNameThreshold: 30,
 	inDegreeWeight: 0.5,
-	bodyLinksAsEdges: true,
 	triggerString: ";;",
 };
 

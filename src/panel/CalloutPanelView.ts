@@ -172,9 +172,9 @@ export class CalloutPanelView extends ItemView {
 		card.dataset.callout = node.type;
 
 		const meta = card.createDiv({ cls: "cg-card-bar" });
-		const inDeg = this.plugin.index.inDegree(node.id);
-		const ref = meta.createSpan({ cls: "cg-card-ref", attr: { "aria-label": `Referenced by ${inDeg}` } });
-		ref.setText("\u{1F4E5} " + inDeg);
+		const refs = this.plugin.index.referenceCount(node.id);
+		const ref = meta.createSpan({ cls: "cg-card-ref", attr: { "aria-label": `Referenced ${refs} times` } });
+		ref.setText("\u{1F4E5} " + refs);
 		const jump = meta.createSpan({ cls: "cg-card-jump", attr: { "aria-label": "Open in note" } });
 		setIcon(jump, "arrow-up-right");
 		jump.onclick = () => this.jump(node);

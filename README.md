@@ -1,12 +1,11 @@
-# Callout Dependency Graph
+# Callout References
 
-An [Obsidian](https://obsidian.md) plugin for note vaults built around **callouts** — theorems, lemmas, definitions, propositions, and the like. It indexes every callout in the vault and gives you three things:
+An [Obsidian](https://obsidian.md) plugin for note vaults built around **callouts** — theorems, lemmas, definitions, propositions, and the like. It indexes every callout in the vault and gives you two things:
 
 1. **A reference inserter** — find and link any callout from anywhere without remembering where it lives or what its block id is.
 2. **A side panel** — browse all callouts of any note at a glance (just the statements, no proofs), to review or to consult while writing elsewhere.
-3. **A dependency graph** — visualize which results depend on which, with edges parsed from the `[[#^block-id]]` links you actually write.
 
-It is designed for a mathematical research vault: callouts of the form `> [!theorem] Theorem (Name).` with a trailing `> ^thm-id` block id, cross-referenced via `[[note#^thm-id]]` wikilinks. Node colors reuse your existing `callouts.css` palette.
+It is designed for a mathematical research vault: callouts of the form `> [!theorem] Theorem (Name).` with a trailing `> ^thm-id` block id, cross-referenced via `[[note#^thm-id]]` wikilinks.
 
 ## Features
 
@@ -29,24 +28,12 @@ It is designed for a mathematical research vault: callouts of the form `> [!theo
 - Each card shows how many times the callout is referenced, and a jump button to open it in place.
 - Viewport-lazy rendering + debounced refresh keep it fast on large, math-heavy notes.
 
-### 3. Dependency graph
-
-A force-directed graph (rendered with [force-graph](https://github.com/vasturiano/force-graph), Obsidian-native in feel) of the callouts and their dependencies.
-
-- Edges are derived **only** from real `[[#^...]]` wikilinks: if the proof (or body) of result *A* links to result *B*, then *A* depends on *B*. No edges are fabricated; the graph grows as you add links while writing.
-- Node color = callout type (your palette), size = how often the callout is referenced, dashed = unlabeled (no block id), red ring = part of a dependency cycle.
-- **Global** mode shows the whole dependency skeleton (isolated callouts hidden by default); **Focus** mode shows the N-hop neighborhood of the callout under your cursor.
-- Click a node to highlight what it *uses* (orange) and what *uses it* (green); hover for a rendered preview; drag to reposition.
-- A warnings strip surfaces **dependency cycles** (usually citation mistakes) and **duplicate block ids**.
-
-Open it from the ribbon (the fork icon) or the commands *"Open callout graph"* / *"Focus current callout in graph"*.
-
 ## How callouts are parsed
 
 - A callout is any section whose first line matches `> [!type] Title`.
 - Its block id is the trailing `> ^type-id` line (equation ids `^eq-...` are ignored).
 - A readable label is derived from: a parenthesized proper name → the title minus its type word → the block id minus its prefix → `Type #n`.
-- An edge `A → B` is added when a `[[#^id]]` link inside *A*'s body, or inside the proof attached to *A*, resolves to another callout *B*. Links to equation blocks and to Zotero citekeys never create edges; self-loops are dropped.
+- A reference to *B* is counted for **every** `[[#^id]]` link anywhere in the vault — in a callout, in a proof, or in plain prose — that resolves to callout *B*. Multiple links to the same callout each add to its count. These counts drive the suggester's ranking and the side panel's "referenced N times" badge. Not counted: links to equation blocks (`^eq-…`), Zotero citekeys, embeds (`![[…]]`), and self-references (a link inside the very callout it points to).
 
 ## Build & install
 

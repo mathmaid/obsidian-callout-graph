@@ -37,18 +37,7 @@ export class CalloutGraphSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Count body links as dependency edges")
-			.setDesc("Treat [[#^...]] links inside a callout's own body (not just its proof) as dependencies. Rebuilds the index.")
-			.addToggle((t) =>
-				t.setValue(this.plugin.settings.bodyLinksAsEdges).onChange(async (v) => {
-					this.plugin.settings.bodyLinksAsEdges = v;
-					await this.plugin.saveSettings();
-					void this.plugin.index.build();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("In-degree ranking weight")
+			.setName("Citation ranking weight")
 			.setDesc("How strongly the reference suggester favors heavily-cited callouts (0 disables).")
 			.addSlider((s) =>
 				s
