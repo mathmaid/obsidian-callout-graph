@@ -1,4 +1,4 @@
-import { Editor, MarkdownFileInfo, Notice, Plugin } from "obsidian";
+import { Editor, MarkdownFileInfo, MarkdownView, Notice, Plugin } from "obsidian";
 import { CalloutGraphSettings, DEFAULT_SETTINGS } from "./types";
 import { CalloutIndex } from "./index/CalloutIndex";
 import { CalloutPanelView, CALLOUT_PANEL_VIEW } from "./panel/CalloutPanelView";
@@ -6,6 +6,14 @@ import { CalloutSuggest } from "./suggest/CalloutSuggest";
 import { RefModal } from "./suggest/RefModal";
 import { SuggestHost } from "./suggest/host";
 import { CalloutGraphSettingTab } from "./settings";
+import {
+	ProofFoldStateStore,
+	proofFoldExtension,
+	scheduleProofFolding,
+	toggleEditorProofAtCursor,
+	toggleEditorProofs,
+	toggleRenderedProofs,
+} from "./proof/ProofFolding";
 
 export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 	settings!: CalloutGraphSettings;
@@ -13,6 +21,11 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 
 	private recent = new Map<string, number>();
 	private recentSeq = 0;
+	private proofStateSaveTimer: number | null = null;
+	private proofFoldStore: ProofFoldStateStore = {
+		get: (path, key) => this.getProofFoldState(path, key),
+		set: (path, key, folded) => this.setProofFoldState(path, key, folded),
+	};
 
 	async onload() {
 		await this.loadSettings();
@@ -37,6 +50,17 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 		});
 
 		this.addCommand({
+			id: "toggle-proof-folds",
+			name: "Toggle all proof folds in current view",
+			checkCallback: (checking) => this.toggleProofFolds(checking),
+		});
+		this.addCommand({
+			id: "toggle-proof-fold-at-cursor",
+			name: "Toggle proof fold at cursor",
+			editorCheckCallback: (checking, editor) => this.toggleProofFoldAtCursor(checking, editor),
+		});
+
+		this.addCommand({
 			id: "callout-graph-stats",
 			name: "Show callout index stats",
 			callback: () => {
@@ -53,6 +77,8 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 		});
 
 		this.registerEditorSuggest(new CalloutSuggest(this.app, this));
+		this.registerEditorExtension(proofFoldExtension(this.proofFoldStore));
+		this.registerMarkdownPostProcessor((el, ctx) => scheduleProofFolding(this.app, el, ctx, this.proofFoldStore), 100);
 		this.addSettingTab(new CalloutGraphSettingTab(this.app, this));
 
 		// Index lifecycle: warm-cache build on layout ready, cold-cache (re)build on first `resolved`.
@@ -83,6 +109,49 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 
 	onunload() {
 		// Do not detach the panel leaf on unload (per Obsidian guidance).
+		if (this.proofStateSaveTimer !== null) {
+			window.clearTimeout(this.proofStateSaveTimer);
+			this.proofStateSaveTimer = null;
+			void this.saveSettings();
+		}
+	}
+
+	private toggleProofFolds(checking: boolean): boolean {
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!view) return false;
+		if (checking) return true;
+
+		if (view.getMode() === "source") {
+			const result = toggleEditorProofs(view.editor, this.proofFoldStore);
+			const message =
+				result.action === "unavailable"
+					? "Editor folding is unavailable in this view."
+					: result.count === 0
+						? "No proofs found in the current editor."
+						: `${result.action === "folded" ? "Folded" : "Unfolded"} ${result.count} proof${result.count === 1 ? "" : "s"}.`;
+			new Notice(message);
+			return true;
+		}
+
+		const container = view.containerEl;
+		const count = toggleRenderedProofs(container);
+		const message = count === 0 ? "No folded proofs in the current view." : `Toggled ${count} proof${count === 1 ? "" : "s"}.`;
+		new Notice(message);
+		return true;
+	}
+
+	private toggleProofFoldAtCursor(checking: boolean, editor: Editor): boolean {
+		if (checking) return true;
+
+		const result = toggleEditorProofAtCursor(editor, this.proofFoldStore);
+		const message =
+			result.action === "unavailable"
+				? "Editor folding is unavailable in this view."
+				: result.count === 0
+					? "No proof found at the cursor."
+					: `${result.action === "folded" ? "Folded" : "Unfolded"} current proof.`;
+		new Notice(message);
+		return true;
 	}
 
 	async activatePanel() {
@@ -111,9 +180,45 @@ export default class CalloutGraphPlugin extends Plugin implements SuggestHost {
 	// --- settings -------------------------------------------------------------
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = (await this.loadData()) as Partial<CalloutGraphSettings> | null;
+		this.settings = {
+			...DEFAULT_SETTINGS,
+			...data,
+			proofFoldStates: data?.proofFoldStates ?? {},
+		};
 	}
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	private setProofFoldState(path: string, key: string, folded: boolean) {
+		const states = this.settings.proofFoldStates;
+		states[path] ??= {};
+		if (states[path][key] === folded) return;
+
+		states[path][key] = folded;
+		this.scheduleProofStateSave();
+	}
+
+	private getProofFoldState(path: string, key: string): boolean | undefined {
+		const states = this.settings.proofFoldStates[path];
+		if (!states) return undefined;
+		if (states[key] !== undefined) return states[key];
+
+		if (key.startsWith("v3:")) {
+			const legacyKey = key.slice(3);
+			if (states[legacyKey] === true) return true;
+			if (states[`v2:${legacyKey}`] === true) return true;
+		}
+
+		return undefined;
+	}
+
+	private scheduleProofStateSave() {
+		if (this.proofStateSaveTimer !== null) window.clearTimeout(this.proofStateSaveTimer);
+		this.proofStateSaveTimer = window.setTimeout(() => {
+			this.proofStateSaveTimer = null;
+			void this.saveSettings();
+		}, 50);
 	}
 }

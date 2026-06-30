@@ -26,12 +26,15 @@ export interface CalloutGraphSettings {
 	inDegreeWeight: number;
 	/** Editor-suggest trigger string. Default ";;" — "@" is taken by latex-suite Greek snippets. */
 	triggerString: string;
+	/** Per-file, per-proof fold states. true = folded, false = open. */
+	proofFoldStates: Record<string, Record<string, boolean>>;
 }
 
 export const DEFAULT_SETTINGS: CalloutGraphSettings = {
 	longNameThreshold: 30,
 	inDegreeWeight: 0.5,
 	triggerString: ";;",
+	proofFoldStates: {},
 };
 
 export function basename(path: string): string {

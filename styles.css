@@ -179,3 +179,29 @@
 .cg-card-callout p:last-child {
 	margin-bottom: 0;
 }
+
+
+/* ===== Folded proof blocks ===== */
+.cg-proof-fold {
+	margin: 1em 0;
+	border-left: 2px solid var(--background-modifier-border);
+	padding-left: 0.75em;
+}
+.cg-proof-fold-summary {
+	cursor: pointer;
+	font-weight: 600;
+	color: var(--text-normal);
+	user-select: none;
+}
+.cg-proof-fold-summary::marker {
+	color: var(--text-muted);
+}
+.cg-proof-fold-body {
+	margin-top: 0.45em;
+}
+.cg-proof-fold-body > :first-child {
+	margin-top: 0;
+}
+.cg-proof-fold-body > :last-child {
+	margin-bottom: 0;
+}

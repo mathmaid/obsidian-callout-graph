@@ -28,6 +28,14 @@ It is designed for a mathematical research vault: callouts of the form `> [!theo
 - Each card shows how many times the callout is referenced, and a jump button to open it in place.
 - Viewport-lazy rendering + debounced refresh keep it fast on large, math-heavy notes.
 
+### 3. Proof folding
+
+- In reading view, ordinary proof blocks written as `**Proof:** ... $\square$` are folded by default.
+- In editor mode, use Obsidian's fold control on a `**Proof:**` line, or run *"Toggle proof fold at cursor"* with the cursor inside one proof.
+- Run *"Toggle all proof folds in current view"* to fold or unfold every detected proof in the active note.
+- Per-proof fold states are saved in the plugin data and restored when the note is opened again.
+- The source Markdown stays unchanged, so equation block IDs inside the proof remain normal body-level blocks.
+
 ## How callouts are parsed
 
 - A callout is any section whose first line matches `> [!type] Title`.
